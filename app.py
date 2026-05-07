@@ -3,12 +3,13 @@ import psycopg2
 import os
 from datetime import datetime
 
-# URL extraída directamente de tu configuración de Railway
-DATABASE_URL = "postgresql://postgres:bGEZBlLXdyBKTqMMwOUxNDybpNPlCUFz@postgres.railway.internal:5432/railway"
+# URL PÚBLICA extraída de tu captura de pantalla para conexión garantizada
+DATABASE_URL = "postgresql://postgres:bGEZBlLXdyBKTqMMwOUxNDybpNPlCUFz@switchyard.proxy.rlwy.net:20701/railway"
 
 def init_db():
     try:
-        conn = psycopg2.connect(DATABASE_URL)
+        # Se usa sslmode='require' porque es una conexión a través de la URL pública
+        conn = psycopg2.connect(DATABASE_URL, sslmode='require')
         cur = conn.cursor()
         cur.execute("""
             CREATE TABLE IF NOT EXISTS citas (
@@ -34,19 +35,29 @@ def init_db():
         cur.close()
         conn.close()
     except Exception as e:
-        st.error(f"Error de conexión: {e}")
+        st.error(f"Error al inicializar base de datos: {e}")
 
+# Iniciar la base de datos al cargar la app
 init_db()
 
+# --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Portal de Citas | Coppel", layout="wide", page_icon="🚚")
 
-st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Coppel.svg/1200px-Coppel.svg.png", width=160)
+# Estilo visual para mejorar la apariencia
+st.markdown("""
+    <style>
+    .main { background-color: #f5f5f5; }
+    .stButton>button { width: 100%; background-color: #0056b3; color: white; height: 3em; border-radius: 10px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Coppel.svg/1200px-Coppel.svg.png", width=180)
 st.title("Sistema de Gestión de Citas CEDIS")
-st.subheader("Acceso Exclusivo para Proveedores")
 st.markdown("---")
 
+# --- FORMULARIO DE REGISTRO ---
 with st.form("form_citas", clear_on_submit=True):
-    st.info("Complete los datos de la entrega")
+    st.subheader("📝 Datos de la Cita")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -57,9 +68,10 @@ with st.form("form_citas", clear_on_submit=True):
         sku = st.text_input("SKU")
     with col3:
         desc = st.text_input("DESCRIPCIÓN")
-        unidades = st.number_input("UNIDADES FACTURADAS", min_value=1)
+        unidades = st.number_input("UNIDADES FACTURADAS", min_value=1, step=1)
 
-    st.markdown("**📍 Logística y Horarios**")
+    st.markdown("---")
+    st.subheader("📍 Logística y Horarios")
     c4, c5, c6, c7 = st.columns(4)
     with c4:
         c_orig_n = st.text_input("NUM. CEDIS ORIGEN")
@@ -75,17 +87,19 @@ with st.form("form_citas", clear_on_submit=True):
         fecha = st.date_input("FECHA DE ENTREGA", min_value=datetime.today())
     with c9:
         rampa = st.text_input("RAMPA")
-    with c10: # AQUÍ ESTABA EL ERROR, CORREGIDO
+    with c10:
         hora = st.time_input("HORA")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    enviado = st.form_submit_button("📩 REGISTRAR CITA")
+    enviado = st.form_submit_button("📩 REGISTRAR CITA EN SISTEMA")
 
     if enviado:
-        if no_prov and sku:
+        if no_prov and razon and sku:
+            # Generación de Folio similar a tu Excel (Ej: GDLJ_1245)
             folio_generado = f"{c_dest_s}_{datetime.now().strftime('%M%S')}"
+            
             try:
-                conn = psycopg2.connect(DATABASE_URL)
+                conn = psycopg2.connect(DATABASE_URL, sslmode='require')
                 cur = conn.cursor()
                 cur.execute("""
                     INSERT INTO citas (
@@ -94,13 +108,14 @@ with st.form("form_citas", clear_on_submit=True):
                         unidades_facturadas, rampa, fecha_entrega, hora_entrega, folio_cita
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (no_prov, razon, c_orig_n, c_orig_s, c_dest_n, c_dest_s, pedido, 
-                      sku, desc, unidades, rampa, fecha, str(hora), folio_generado))
+                      sku, desc, int(unidades), rampa, fecha, str(hora), folio_generado))
                 conn.commit()
                 cur.close()
                 conn.close()
-                st.success(f"✅ Cita registrada con éxito. FOLIO: {folio_generado}")
+                
+                st.success(f"✅ ¡Cita procesada con éxito! Su folio es: **{folio_generado}**")
                 st.balloons()
             except Exception as e:
-                st.error(f"Error al guardar: {e}")
+                st.error(f"Error al guardar en la base de datos: {e}")
         else:
-            st.warning("⚠️ El Número de Proveedor y el SKU son obligatorios.")
+            st.warning("⚠️ Por favor rellene los campos obligatorios: Proveedor, Razón Social y SKU.")
