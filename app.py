@@ -3,15 +3,13 @@ import psycopg2
 import os
 from datetime import datetime
 
-# URL extraída directamente de tu configuración de Railway para forzar la conexión
+# URL extraída directamente de tu configuración de Railway
 DATABASE_URL = "postgresql://postgres:bGEZBlLXdyBKTqMMwOUxNDybpNPlCUFz@postgres.railway.internal:5432/railway"
 
 def init_db():
     try:
-        # Conexión directa usando la URL de tu imagen
         conn = psycopg2.connect(DATABASE_URL)
         cur = conn.cursor()
-        # Crear la tabla con todos los campos de tu Excel (unidades, rampa, hora, folio)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS citas (
                 id SERIAL PRIMARY KEY,
@@ -38,14 +36,13 @@ def init_db():
     except Exception as e:
         st.error(f"Error de conexión: {e}")
 
-# Ejecutar la creación de la tabla al iniciar
 init_db()
 
-# --- INTERFAZ DEL PORTAL ---
 st.set_page_config(page_title="Portal de Citas | Coppel", layout="wide", page_icon="🚚")
 
 st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Coppel.svg/1200px-Coppel.svg.png", width=160)
 st.title("Sistema de Gestión de Citas CEDIS")
+st.subheader("Acceso Exclusivo para Proveedores")
 st.markdown("---")
 
 with st.form("form_citas", clear_on_submit=True):
@@ -75,19 +72,18 @@ with st.form("form_citas", clear_on_submit=True):
 
     c8, c9, c10 = st.columns(3)
     with c8:
-        fecha = st.date_input("FECHA DE ENTREGA")
+        fecha = st.date_input("FECHA DE ENTREGA", min_value=datetime.today())
     with c9:
-        rampa = st.text_input("RAMPA") # Campo solicitado
-    with col10 := c10:
-        hora = st.time_input("HORA") # Campo solicitado
+        rampa = st.text_input("RAMPA")
+    with c10: # AQUÍ ESTABA EL ERROR, CORREGIDO
+        hora = st.time_input("HORA")
 
+    st.markdown("<br>", unsafe_allow_html=True)
     enviado = st.form_submit_button("📩 REGISTRAR CITA")
 
     if enviado:
         if no_prov and sku:
-            # Generar folio automático (Ej: GDLJ_01)
             folio_generado = f"{c_dest_s}_{datetime.now().strftime('%M%S')}"
-            
             try:
                 conn = psycopg2.connect(DATABASE_URL)
                 cur = conn.cursor()
@@ -102,6 +98,9 @@ with st.form("form_citas", clear_on_submit=True):
                 conn.commit()
                 cur.close()
                 conn.close()
-                st.success(f"✅ Cita registrada. FOLIO: {folio_generado}")
+                st.success(f"✅ Cita registrada con éxito. FOLIO: {folio_generado}")
+                st.balloons()
             except Exception as e:
                 st.error(f"Error al guardar: {e}")
+        else:
+            st.warning("⚠️ El Número de Proveedor y el SKU son obligatorios.")
